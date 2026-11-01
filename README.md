@@ -1,0 +1,1 @@
+# bug-bounty-008-yandex-lavka-penalty-bypass
