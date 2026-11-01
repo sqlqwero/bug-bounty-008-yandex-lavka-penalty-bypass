@@ -92,7 +92,38 @@ But the lateness threshold is checked with a flawed boundary condition. Starting
 <sub>🔴 High &nbsp;•&nbsp; 🟠 Medium</sub>
 
 > [!CAUTION]
-> This is a logic flaw, not a technical exploit — no injection, no auth bypass, just a mishandled boundary in the penalty rule.
+> Root cause reconstructed by probing the penalty rule around the threshold — no injection or auth bypass, just a mishandled boundary in server-side logic.
+
+### 🧬 Root Cause
+
+Reconstructed penalty check from observed behavior — the comparison is **strictly** greater-than, so the exact threshold slips through both branches:
+
+```python
+LATE_LIMIT = timedelta(minutes=30)
+
+def apply_late_penalty(slot_start, actual_start):
+    delay = actual_start - slot_start
+
+    if delay > LATE_LIMIT:            # 🐞 strict '>' — boundary not covered
+        courier.rating  -= 16
+        courier.balance -= 1000       # ₽ financial correction
+
+    # delay == 30:00 exactly → neither branch runs → penalty silently skipped
+```
+
+### 🧪 Proof of Concept
+
+```text
+Slot start:    16:00:00
+Slot started:  16:30:00
+delay       =  00:30:00   ==  LATE_LIMIT   (not strictly >)
+
+→ rating:   unchanged      (expected -16)
+→ balance:  unchanged      (expected -1000 ₽)
+→ slot:     continues normally, no flag raised
+```
+
+> One second earlier (`16:29:59`) or later (`16:30:01`) and the rule behaves as intended — the bug lives only on the exact `== 30:00` edge.
 
 ### 🧭 Logic Flow
 
